@@ -29,6 +29,9 @@ import android.util.ArraySet;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.MotionEvent;
+import android.view.View;
+import android.view.animation.Animation;
+import android.widget.Button;
 import android.widget.Toast;
 import com.google.android.filament.gltfio.Animator;
 import com.google.android.filament.gltfio.FilamentAsset;
@@ -36,10 +39,13 @@ import com.google.ar.core.Anchor;
 import com.google.ar.core.HitResult;
 import com.google.ar.core.Plane;
 import com.google.ar.sceneform.AnchorNode;
+import com.google.ar.sceneform.Node;
+import com.google.ar.sceneform.math.Vector3;
 import com.google.ar.sceneform.rendering.Color;
 import com.google.ar.sceneform.rendering.Material;
 import com.google.ar.sceneform.rendering.ModelRenderable;
 import com.google.ar.sceneform.rendering.Renderable;
+import com.google.ar.sceneform.rendering.ViewRenderable;
 import com.google.ar.sceneform.ux.ArFragment;
 import com.google.ar.sceneform.ux.TransformableNode;
 import java.lang.ref.WeakReference;
@@ -62,12 +68,14 @@ public class GltfActivity extends AppCompatActivity {
     Long startTime;
     float duration;
     int index;
+    boolean isPlaying;
 
     AnimationInstance(Animator animator, int index, Long startTime) {
       this.animator = animator;
       this.startTime = startTime;
       this.duration = animator.getAnimationDuration(index);
       this.index = index;
+      this.isPlaying = false;
     }
   }
 
@@ -141,10 +149,13 @@ public class GltfActivity extends AppCompatActivity {
           model.setRenderable(renderable);
           model.select();
 
+          AnimationInstance animationInstance = null;
           FilamentAsset filamentAsset = model.getRenderableInstance().getFilamentAsset();
           if (filamentAsset.getAnimator().getAnimationCount() > 0) {
-            animators.add(new AnimationInstance(filamentAsset.getAnimator(), 0, System.nanoTime()));
+            animationInstance = new AnimationInstance(filamentAsset.getAnimator(), 0, System.nanoTime());
+            animators.add(animationInstance);
           }
+          final AnimationInstance currentAnimationInstance = animationInstance;
 
           Color color = colors.get(nextColor);
           nextColor++;
@@ -152,6 +163,28 @@ public class GltfActivity extends AppCompatActivity {
             Material material = renderable.getMaterial(i);
             material.setFloat4("baseColorFactor", color);
           }
+
+          ViewRenderable.builder().setView(GltfActivity.this, R.layout.anim_playback).build().thenAccept(
+                  (ViewRenderable v) -> {
+                      Node controlsNode = new Node();
+                      controlsNode.setParent(model);
+                      controlsNode.setRenderable(v);
+                      controlsNode.setLocalPosition(new Vector3(0.0f, 1.0f, 0.0f));
+
+                      View view = v.getView();
+                      Button button = view.findViewById(R.id.play_pause_button);
+                      button.setOnClickListener((View) -> {
+                          currentAnimationInstance.isPlaying = !currentAnimationInstance.isPlaying;
+                          button.setText(currentAnimationInstance.isPlaying ? "Pause" : "Play");
+                          if (currentAnimationInstance.isPlaying) {
+                              currentAnimationInstance.startTime = System.nanoTime();
+                              for (AnimationInstance animator : animators) {
+                                  animator.startTime = System.nanoTime();
+                              }
+                          }
+                      });
+                  }
+          );
         });
 
     arFragment
@@ -159,14 +192,20 @@ public class GltfActivity extends AppCompatActivity {
         .getScene()
         .addOnUpdateListener(
             frameTime -> {
-              Long time = System.nanoTime();
-              for (AnimationInstance animator : animators) {
-                animator.animator.applyAnimation(
-                    animator.index,
-                    (float) ((time - animator.startTime) / (double) SECONDS.toNanos(1))
-                        % animator.duration);
-                animator.animator.updateBoneMatrices();
-              }
+                Long time = System.nanoTime();
+                for (AnimationInstance animator : animators) {
+                    if (animator.isPlaying) {
+                        animator.animator.applyAnimation(
+                                animator.index,
+                                (float) ((time - animator.startTime) / (double) SECONDS.toNanos(1))
+                                        % animator.duration);
+                    } else {
+                        animator.animator.applyAnimation(
+                                animator.index,
+                                0.0f);
+                    }
+                    animator.animator.updateBoneMatrices();
+                }
             });
   }
 
