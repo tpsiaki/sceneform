@@ -29,6 +29,7 @@ import android.util.ArraySet;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.MotionEvent;
+import android.view.View;
 import android.widget.Toast;
 import com.google.android.filament.gltfio.Animator;
 import com.google.android.filament.gltfio.FilamentAsset;
@@ -107,8 +108,7 @@ public class GltfActivity extends AppCompatActivity {
     ModelRenderable.builder()
         .setSource(
             this,
-            Uri.parse(
-                "https://storage.googleapis.com/ar-answers-in-search-models/static/Tiger/model.glb"))
+            R.raw.scale_test)
         .setIsFilamentGltf(true)
         .build()
         .thenAccept(
@@ -165,6 +165,10 @@ public class GltfActivity extends AppCompatActivity {
                   .build()
                   .thenAccept(
                           (renderable) -> {
+                              View tigerCard = renderable.getView().findViewById(R.id.tiger_card);
+                              tigerCard.setOnClickListener((event) -> {
+                                  Log.e("tpsiaki", "click");
+                              });
                               tigerTitleNode.setRenderable(renderable);
                               tigerTitleNode.setEnabled(true);
                           })
